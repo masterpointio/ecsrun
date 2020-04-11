@@ -1,0 +1,170 @@
+#!/usr/bin/env bash
+# Inspired by: https://medium.com/hackernoon/running-laravel-artisan-commands-on-aws-fargate-6c0e95f8e72b
+# Run a one off command against a Fargate container.
+# I dislike bash so much and yet... I created this thing which I like. Confusing.
+
+# Colors
+red=$'\e[1;31m'
+grn=$'\e[1;32m'
+yel=$'\e[1;33m'
+blu=$'\e[1;34m'
+mag=$'\e[1;35m'
+cyn=$'\e[1;36m'
+end=$'\e[0m'
+
+# Requirements:
+# Jq - Version >= 1.6
+# Terraform - Version >= 0.12.21
+# AWS CLI - Version >= 1.16.238
+
+# Enforce Versions
+AWSCLI_VER_TAR=1.16.238
+JQ_VER_TAR=1.6
+TERRAFORM_VER_TAR=0.12.21
+TERRAFORM_VER=$( terraform --version 2>&1 | cut -d ' ' -f 2 | head -n 1 | cut -d 'v' -f 2 )
+AWSCLI_VER=$( aws --version 2>&1 | cut -d ' ' -f 1 | cut -d '/' -f 2 )
+JQ_VER=$( jq --version 2>&1 )
+
+if [[ ${AWSCLI_VER} < ${AWSCLI_VER_TAR} ]]; then
+  echo "ERROR: Please upgrade your AWS CLI to version ${AWSCLI_VER_TAR} or later!"
+  exit 1
+fi
+
+if [[ ${JQ_VER} < ${JQ_VER_TAR} ]]; then
+  echo "ERROR: Please upgrade JQ version ${JQ_VER_TAR} or later!"
+  exit 1
+fi
+
+if [[ ${TERRAFORM_VER} < ${TERRAFORM_VER_TAR} ]]; then
+  echo "ERROR: Please upgrade Terraform to version ${TERRAFORM_VER_TAR} or later!"
+  exit 1
+fi
+
+APP_ENV=""
+COMMAND=""
+DIR=$( dirname ${BASH_SOURCE[0]} )
+
+usage() {
+  echo "Usage: $0 -e <environment> -c \"<cmd>\""
+  echo " <environment> must be either 'dev', 'stage', or 'prod'"
+  echo " <cmd> the manage.py command to execute remotely via fargate"
+  exit 1
+}
+
+while getopts ":e:c:h:" o; do
+    case "${o}" in
+        e)
+            APP_ENV=${OPTARG}
+            (("${APP_ENV}" == "dev" || "${APP_ENV}" == "stage" || "${APP_ENV}" == "prod")) || usage
+            ;;
+        c)
+            COMMAND=${OPTARG}
+            ;;
+        *)
+            usage
+            ;;
+    esac
+done
+shift $((OPTIND-1))
+
+if [[ -z "${APP_ENV}" ]]; then
+  usage
+fi
+
+if [[ -z "${COMMAND}" ]]; then
+  usage
+fi
+
+CLUSTER_NAME="prefix-${APP_ENV}"
+APP_NAME="prefix-${APP_ENV}-app"
+
+# Change directory to our Environment's Terraform Workspace before running `output`
+cd ${DIR}/terraform && terraform workspace select ${APP_ENV}
+
+TERRAFORM_OUTPUTS=$( terraform output -json )
+PRIVATE_SUBNET_ID=$( echo $TERRAFORM_OUTPUTS | jq ".private_subnet_ids.value | .[0]"  | sed -e 's/^"//' -e 's/"$//' )
+SECURITY_GROUP=$( echo $TERRAFORM_OUTPUTS | jq ".fargate_security_group.value" | sed -e 's/^"//' -e 's/"$//' )
+
+NETWORK_CONF=$( jq -n \
+                   --arg subnet ${PRIVATE_SUBNET_ID} \
+                   --arg security_group ${SECURITY_GROUP} \
+                '{
+                  "awsvpcConfiguration": {
+                    "subnets": [ $subnet ],
+                    "securityGroups": [ $security_group ],
+                    "assignPublicIp": "ENABLED"
+                  }
+                }');
+
+echo "Starting ${cyn}Run Task Operation${end}!"
+
+RUN_TASK_OUTPUT=$( aws ecs run-task \
+                           --cluster ${CLUSTER_NAME} \
+                           --task-definition ${APP_NAME} \
+                           --overrides "{\"containerOverrides\":[{\"name\":\"${APP_NAME}\",\"command\":[\"chamber\", \"exec\", \"${APP_ENV}\", \"--\", \"python\", \"manage.py\", \"${COMMAND}\"],\"environment\":[{\"name\":\"RUN_COMMAND_TASK\", \"value\": \"true\"}]}]}" \
+                           --launch-type FARGATE \
+                           --network-configuration "${NETWORK_CONF}")
+
+echo $RUN_TASK_OUTPUT | jq "."
+
+echo "Finished ${cyn}Run Task Operation${end}."
+
+TASK_ARN=$( echo $RUN_TASK_OUTPUT | jq -r ".tasks | .[0] | .taskArn" )
+TASK_ID=$( echo $TASK_ARN | cut -d '/' -f 3 )
+
+LOG_GROUP_NAME="$APP_NAME-logs"
+LOG_STREAM_NAME="$APP_NAME/$APP_NAME/$TASK_ID"
+
+echo -n "Waiting ${red}60 seconds${end} for Task to spin up..."
+
+sleep 10
+echo -n "."
+sleep 10
+echo -n "."
+sleep 10
+echo -n "."
+sleep 10
+echo -n "."
+sleep 10
+echo "."
+sleep 10
+
+echo "Waiting for Task to output logs to ${mag}$LOG_GROUP_NAME / $LOG_STREAM_NAME${end}."
+
+WAIT_TIME=300 # 5 Minutes
+WAIT_START=$( date +%s )
+
+while true; do
+  WAIT_CURRENT=$( date +%s )
+  WAIT_DIFF=$(( $WAIT_CURRENT - $WAIT_START ))
+
+  if [[ $WAIT_DIFF -gt $WAIT_TIME ]]; then
+    echo "Failed to get logs from container within $WAIT_TIME seconds. Exiting."
+    exit 1
+  fi
+
+  LOGS=$( aws logs get-log-events \
+                           --log-group-name $LOG_GROUP_NAME \
+                           --log-stream-name $LOG_STREAM_NAME 2>/dev/null )
+  LOG_COUNT=$( echo $LOGS | jq ".events | length" )
+  if [[ $LOG_COUNT -gt 0 ]]; then
+    # Do a final sleep (to let the job do its thing) and then break the loop
+    echo ""
+    sleep 30
+    break
+  fi
+
+  # If neither of the above completed then let's keep checking the logs
+  echo -n "${grn}.${end}"
+
+  sleep 5
+done
+
+FINAL_LOGS=$( aws logs get-log-events \
+                       --log-group-name $LOG_GROUP_NAME \
+                       --log-stream-name $LOG_STREAM_NAME )
+
+echo "Task Logs:"
+echo $FINAL_LOGS | jq ".events"
+
+echo "${yel}Completed!${end}"
