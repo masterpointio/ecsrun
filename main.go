@@ -21,7 +21,7 @@ THE SOFTWARE.
 */
 package main
 
-import "github.com/masterpointio/escrun/cmd"
+import "github.com/masterpointio/ecsrun/cmd"
 
 func main() {
 	cmd.Execute()
