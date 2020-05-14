@@ -1,30 +1,8 @@
-/*
-Copyright © 2020 Matt Gowie <matt@masterpoint.io>
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
-*/
 package cmd
 
 import (
 	"fmt"
 	"os"
-	"testing"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -51,7 +29,10 @@ using their existing Task Definitions.
 TODO: Supply more info here.`,
 
 	Run: func(cmd *cobra.Command, args []string) {
-		log.Info("SHRED!")
+		cluster := viper.GetString("cluster")
+		def := viper.GetString("def")
+		runCmd := viper.GetString("cmd")
+
 	},
 }
 
@@ -65,18 +46,31 @@ func Execute() {
 }
 
 func init() {
-	cobra.OnInitialize(initConfig, initVerbose, initAws)
+	log.Debug("Root init.")
+	cobra.OnInitialize(initConfig, initVerbose, initAws, buildRunConfig)
 
 	log.SetOutput(os.Stderr)
 
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.escrun.yaml)")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.escrun)")
 	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "verbose output")
-	rootCmd.PersistentFlags().StringP("cred", "c", "", "aws credentials file (default is $HOME/.aws/.credentials)")
-	rootCmd.PersistentFlags().StringP("profile", "p", "", "aws profile to target (default is AWS_PROFILE or 'default')")
-	rootCmd.PersistentFlags().StringP("region", "r", "", `aws region to target (default is AWS_REGION or pulled from $HOME/.aws/.credentials)`)
+
+	rootCmd.PersistentFlags().String("cred", "", "AWS credentials file (default is $HOME/.aws/.credentials)")
+	rootCmd.PersistentFlags().StringP("profile", "p", "", "AWS profile to target (default is AWS_PROFILE or 'default')")
+	rootCmd.PersistentFlags().StringP("region", "r", "", `AWS region to target (default is AWS_REGION or pulled from $HOME/.aws/.credentials)`)
+
+	rootCmd.PersistentFlags().String("cluster", "", "The ECS Cluster to run the task in.")
+	rootCmd.PersistentFlags().StringP("def", "d", "", "The ECS Task Definition to use.")
+	rootCmd.PersistentFlags().StringP("cmd", "c", "", "The ECS Task Definition to use.")
+
+	rootCmd.MarkFlagRequired("cluster")
+	rootCmd.MarkFlagRequired("def")
+	rootCmd.MarkFlagRequired("cmd")
 
 	viper.BindPFlag("profile", rootCmd.PersistentFlags().Lookup("profile"))
 	viper.BindPFlag("region", rootCmd.PersistentFlags().Lookup("region"))
+	viper.BindPFlag("cluster", rootCmd.PersistentFlags().Lookup("cluster"))
+	viper.BindPFlag("def", rootCmd.PersistentFlags().Lookup("def"))
+	viper.BindPFlag("cmd", rootCmd.PersistentFlags().Lookup("cmd"))
 }
 
 // initConfig reads in config file and ENV variables if set.
@@ -120,19 +114,12 @@ func initVerbose() {
 }
 
 func initAws() {
-	profile := getProfile(nil)
+	profile := getProfile()
 
 	// Create our AWS session object for AWS API Usage
 	sesh, err := initAwsSession(profile)
 	if err != nil {
 		log.Fatal("Unable to init AWS Session. Check your credentials and profile.")
-		log.Fatal(err)
-		os.Exit(1)
-	}
-
-	cred, err := sesh.Config.Credentials.Get()
-	if err != nil {
-		log.Fatal("Unable to get credentials from Session. Check your credentials and profile.")
 		log.Fatal(err)
 		os.Exit(1)
 	}
@@ -146,11 +133,9 @@ func initAws() {
 
 	viper.Set("profile", profile)
 	viper.Set("region", region)
-	viper.Set("accesskey", cred.AccessKeyID)
-	viper.Set("secretkey", cred.SecretAccessKey)
 }
 
-func getProfile(t *testing.T) string {
+func getProfile() string {
 	var profile = viper.GetString("profile")
 	if profile == "" {
 		profile = "default"
@@ -190,4 +175,8 @@ func initAwsSession(profile string) (*session.Session, error) {
 	}
 
 	return sesh, err
+}
+
+func buildRunConfig() (*RunConfig) {
+
 }
