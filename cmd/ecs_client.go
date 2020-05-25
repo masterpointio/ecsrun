@@ -2,14 +2,14 @@ package cmd
 
 import (
 	// "fmt"
-	"os"
 
 	"github.com/aws/aws-sdk-go/service/ecs"
+	"github.com/aws/aws-sdk-go/service/ecs/ecsiface"
 )
 
 // ECSClient is the wrapper around the aws-sdk ECS client and its various structs / methods.
 type ECSClient interface {
-	BuildRunTaskInput() (*ecs.RunTaskInput, error)
+	BuildRunTaskInput() *ecs.RunTaskInput
 	RunTask(runTaskInput *ecs.RunTaskInput) (*ecs.RunTaskOutput, error)
 }
 
@@ -32,19 +32,16 @@ func newClient(client ecsiface.ECSAPI, config *RunConfig) ECSClient {
 	}
 }
 
-func (c *ecsClient) BuildRunTaskInput() (*ecs.RunTaskInput, error) {
-
-	taskDefition := c.getTaskDefinition()
-	assignPublicIP := c.getAssignPublicIp()
+func (c *ecsClient) BuildRunTaskInput() *ecs.RunTaskInput {
 
 	runInput := &ecs.RunTaskInput{
 		Cluster:        &c.config.Cluster,
-		TaskDefinition: &taskDefition,
+		TaskDefinition: &c.config.TaskDefinition,
 		Count:          &c.config.Count,
 		LaunchType:     &c.config.LaunchType,
 		NetworkConfiguration: &ecs.NetworkConfiguration{
 			AwsvpcConfiguration: &ecs.AwsVpcConfiguration{
-				AssignPublicIp: &assignPublicIP,
+				AssignPublicIp: &c.config.AssignPublicIP,
 				SecurityGroups: []*string{&c.config.SecurityGroupID},
 				Subnets:        []*string{&c.config.SubnetID},
 			},
@@ -53,40 +50,20 @@ func (c *ecsClient) BuildRunTaskInput() (*ecs.RunTaskInput, error) {
 			ContainerOverrides: []*ecs.ContainerOverride{
 				{
 					Command: c.config.Command,
-					Name:    &def,
+					Name:    &c.config.ContainerName,
 				},
 			},
 		},
 	}
 
-	return runInput, nil
+	return runInput
 }
 
 func (c *ecsClient) RunTask(runTaskInput *ecs.RunTaskInput) (*ecs.RunTaskOutput, error) {
-
-	output, err := client.RunTask(runInput)
+	output, err := c.client.RunTask(runTaskInput)
 	if err != nil {
 		log.Fatal("Received error when invoking RunTask.", err)
-		log.Fatal("Error: ", err)
-		os.Exit(1)
 	}
 
-	log.Info("Output: ", output)
 	return output, err
-}
-
-func (c *ecsClient) getTaskDefinition() string {
-	if c.config.TaskDefinitionRevision != nil {
-		return c.config.TaskDefinitionName + ":" + c.config.TaskDefinitionRevision
-	}
-
-	return c.config.TaskDefinitionName
-}
-
-func (c *ecsClient) getAssignPublicIP() string {
-	if c.config.AssignPublicIP {
-		return ecs.AssignPublicIpEnabled
-	}
-
-	return ecs.AssignPublicIpDisabled
 }
