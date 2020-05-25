@@ -33,8 +33,7 @@ func newClient(client ecsiface.ECSAPI, config *RunConfig) ECSClient {
 }
 
 func (c *ecsClient) BuildRunTaskInput() *ecs.RunTaskInput {
-
-	runInput := &ecs.RunTaskInput{
+	return &ecs.RunTaskInput{
 		Cluster:        &c.config.Cluster,
 		TaskDefinition: &c.config.TaskDefinition,
 		Count:          &c.config.Count,
@@ -55,11 +54,11 @@ func (c *ecsClient) BuildRunTaskInput() *ecs.RunTaskInput {
 			},
 		},
 	}
-
-	return runInput
 }
 
 func (c *ecsClient) RunTask(runTaskInput *ecs.RunTaskInput) (*ecs.RunTaskOutput, error) {
+	log.Debug("Input: ", runTaskInput)
+
 	output, err := c.client.RunTask(runTaskInput)
 	if err != nil {
 		log.Fatal("Received error when invoking RunTask.", err)

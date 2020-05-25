@@ -55,8 +55,9 @@ func BuildRunConfig(session *session.Session) *RunConfig {
 
 func getNormalizedCmd() []*string {
 	result := []*string{}
-	for _, v := range viper.GetStringSlice("cmd") {
-		result = append(result, &v)
+	original := viper.GetStringSlice("cmd")
+	for idx := range original {
+		result = append(result, &original[idx])
 	}
 
 	return result
