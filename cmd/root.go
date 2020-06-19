@@ -6,20 +6,22 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/mitchellh/go-homedir"
 
 	"github.com/sirupsen/logrus"
 
-	homedir "github.com/mitchellh/go-homedir"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
 
 var cfgFile string
-var awsSession *session.Session
 
 var log = logrus.New()
 
-var rootCmd = &cobra.Command{
+var newEcsClient func(*RunConfig) ECSClient
+
+var rootCmd *cobra.Command = &cobra.Command{
 	Use:   "escrun",
 	Short: "Easily run one-off tasks against a ECS Cluster",
 	Long: `
@@ -27,36 +29,43 @@ ecsrun is a CLI tool that allows users to run one-off administrative tasks
 using their existing Task Definitions.`,
 
 	Run: func(cmd *cobra.Command, args []string) {
-		config := BuildRunConfig(awsSession)
+		log.Info("Run!")
 
-		ecsClient := NewEcsClient(config)
+		config := BuildRunConfig()
+		ecsClient := newEcsClient(config)
 
 		input := ecsClient.BuildRunTaskInput()
+		log.Debug("RunTask input: ", input)
+
 		output, err := ecsClient.RunTask(input)
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		log.Info("RunTask output: ", output)
+		log.Debug("RunTask output: ", output)
 	},
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
-func Execute() {
+func Execute(n func(*RunConfig) ECSClient) {
+	newEcsClient = n
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatal(err)
 	}
 }
 
 func init() {
-	cobra.OnInitialize(initConfig, initVerbose, initAws)
+	cobra.OnInitialize(initConfig, initEnvVars, initRequired, initVerbose, initAws)
 
 	log.SetOutput(os.Stderr)
 
 	// Basic Flags
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.escrun)")
 	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "verbose output")
+
+	// Config File Flags
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config-file", "", "config file (default is $PWD/escrun.yml or $HOME/ecsrun.yml)")
+	rootCmd.PersistentFlags().String("config", "default", "config entry to read in the config file (default is 'default')")
 
 	// AWS Cred / Environment Flags
 	rootCmd.PersistentFlags().String("cred", "", "AWS credentials file (default is $HOME/.aws/.credentials)")
@@ -76,16 +85,6 @@ func init() {
 	rootCmd.PersistentFlags().StringP("subnet", "s", "", "The Subnet ID that the task should be launched in.")
 	rootCmd.PersistentFlags().StringP("security-group", "g", "", "The Security Group ID that the task should be associated with.")
 	rootCmd.PersistentFlags().Bool("public", false, "Assigns a public IP to the task if included. (default is false)")
-
-	// Require specific flags
-	rootCmd.MarkPersistentFlagRequired("cluster")
-	rootCmd.MarkPersistentFlagRequired("task")
-	rootCmd.MarkPersistentFlagRequired("cmd")
-	rootCmd.MarkPersistentFlagRequired("subnet")
-	rootCmd.MarkPersistentFlagRequired("security-group")
-
-	// Bind em All
-	viper.BindPFlags(rootCmd.PersistentFlags())
 }
 
 // initConfig reads in config file and ENV variables if set.
@@ -97,20 +96,52 @@ func initConfig() {
 		// Find home directory.
 		home, err := homedir.Dir()
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 
-		// Search config in home directory with name ".escrun" (without extension).
+		// Search config in home and current directory with name "escrun.yml" (without extension).
 		viper.AddConfigPath(home)
-		viper.SetConfigName(".escrun")
+		viper.AddConfigPath(".")
+		viper.SetConfigType("yaml")
+		viper.SetConfigName("ecsrun.yml")
 	}
-
-	viper.AutomaticEnv() // read in environment variables that match
 
 	// If a config file is found, read it in.
 	if err := viper.ReadInConfig(); err == nil {
 		log.Info("Using config file:", viper.ConfigFileUsed())
 	}
+}
+
+func initEnvVars() {
+	viper.SetEnvPrefix("ecsrun")
+
+	// Bind Vars to Env Variables
+	viper.BindEnv("verbose")
+	viper.BindEnv("cluster")
+	viper.BindEnv("task")
+	viper.BindEnv("cmd")
+	viper.BindEnv("subnet")
+	viper.BindEnv("security-group", "ECSRUN_SECURITY_GROUP")
+
+	// read in environment variables that match the above
+	viper.AutomaticEnv()
+}
+
+func initRequired() {
+	// NOTE: This is a work around for using required flags with Viper Env Vars
+	// https://github.com/spf13/viper/issues/397
+	viper.BindPFlags(rootCmd.PersistentFlags())
+	rootCmd.Flags().VisitAll(func(f *pflag.Flag) {
+		if viper.IsSet(f.Name) && viper.GetString(f.Name) != "" {
+			rootCmd.Flags().Set(f.Name, viper.GetString(f.Name))
+		}
+	})
+
+	rootCmd.MarkPersistentFlagRequired("cluster")
+	rootCmd.MarkPersistentFlagRequired("task")
+	rootCmd.MarkPersistentFlagRequired("cmd")
+	rootCmd.MarkPersistentFlagRequired("subnet")
+	rootCmd.MarkPersistentFlagRequired("security-group")
 }
 
 func initVerbose() {
@@ -144,8 +175,7 @@ func initAws() {
 	sesh.Config.WithRegion(region)
 
 	// Set our awsSession for later use.
-	// TODO: What's the proper way to do this... This seems weird.
-	awsSession = sesh
+	viper.Set("session", sesh)
 }
 
 func getProfile() string {
@@ -157,7 +187,6 @@ func getProfile() string {
 		}
 	}
 
-	log.Debug("Using AWS Profile: " + profile)
 	return profile
 }
 
@@ -166,8 +195,6 @@ func initAwsSession(profile string) (*session.Session, error) {
 	if err != nil {
 		log.Fatal("Not able to get credFile from cmd.", err)
 	}
-
-	log.Debug("Cred File: " + credFile)
 
 	var sesh *session.Session
 

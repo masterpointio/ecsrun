@@ -24,5 +24,5 @@ package main
 import "github.com/masterpointio/ecsrun/cmd"
 
 func main() {
-	cmd.Execute()
+	cmd.Execute(cmd.NewEcsClient)
 }

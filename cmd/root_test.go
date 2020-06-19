@@ -4,6 +4,9 @@ import (
 	"os"
 	"testing"
 
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/ecs"
+	"github.com/aws/aws-sdk-go/service/ecs/ecsiface"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/spf13/viper"
@@ -23,20 +26,41 @@ func teardown() {
 	viper.Reset()
 }
 
+type ecsClientFake struct {
+	client ecsiface.ECSAPI
+	config *RunConfig
+}
+
+func (c *ecsClientFake) BuildRunTaskInput() *ecs.RunTaskInput {
+	return &ecs.RunTaskInput{}
+}
+
+func (c *ecsClientFake) RunTask(runTaskInput *ecs.RunTaskInput) (*ecs.RunTaskOutput, error) {
+	return &ecs.RunTaskOutput{}, nil
+}
+
+func newEcsClientFake(c *RunConfig) ECSClient {
+	return &ecsClientFake{}
+}
+
 func TestExecute(t *testing.T) {
 	setup()
 	assert := assert.New(t)
 
 	os.Setenv("AWS_ACCESS_KEY_ID", "123")
 	os.Setenv("AWS_SECRET_ACCESS_KEY", "SECRET123")
+	os.Setenv("ECSRUN_CMD", "echo, hello, world")
+	os.Setenv("ECSRUN_CLUSTER", "shred")
+	os.Setenv("ECSRUN_SECURITY_GROUP", "sg-1")
+	os.Setenv("ECSRUN_SUBNET", "public-subnet-1")
+	os.Setenv("ECSRUN_TASK", "task")
+	os.Setenv("ECSRUN_VERBOSE", "true")
 
-	Execute()
+	Execute(newEcsClientFake)
 
-	var accessKey = viper.Get("accessKey")
-	assert.Equal("123", accessKey)
-
-	var secretKey = viper.Get("secretKey")
-	assert.Equal("SECRET123", secretKey)
+	var sesh = viper.Get("session")
+	cred, _ := sesh.(*session.Session).Config.Credentials.Get()
+	assert.Equal("123", cred.AccessKeyID)
 
 	teardown()
 }
@@ -46,6 +70,16 @@ func TestInitAws(t *testing.T) {
 	setup()
 
 	// TODO
+	t.Skip("TODO")
+	assert.Equal(true, true)
+
+	teardown()
+}
+
+func TestConfigFile(t *testing.T) {
+	assert := assert.New(t)
+	setup()
+
 	t.Skip("TODO")
 	assert.Equal(true, true)
 

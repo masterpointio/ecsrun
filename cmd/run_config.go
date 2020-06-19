@@ -27,7 +27,7 @@ type RunConfig struct {
 
 // BuildRunConfig constructs the our primary RunConfig object using the given
 // AWS session and the CLI args from viper.
-func BuildRunConfig(session *session.Session) *RunConfig {
+func BuildRunConfig() *RunConfig {
 
 	// Convert our cmd slice to a slice of pointers
 
@@ -35,6 +35,7 @@ func BuildRunConfig(session *session.Session) *RunConfig {
 	taskDef := getTaskDefinition()
 	name := getContainerName()
 	assignPublicIP := getAssignPublicIP()
+	session := viper.Get("session").(*session.Session)
 
 	return &RunConfig{
 		Command:                cmd,

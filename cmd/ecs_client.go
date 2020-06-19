@@ -57,8 +57,6 @@ func (c *ecsClient) BuildRunTaskInput() *ecs.RunTaskInput {
 }
 
 func (c *ecsClient) RunTask(runTaskInput *ecs.RunTaskInput) (*ecs.RunTaskOutput, error) {
-	log.Debug("Input: ", runTaskInput)
-
 	output, err := c.client.RunTask(runTaskInput)
 	if err != nil {
 		log.Fatal("Received error when invoking RunTask.", err)
