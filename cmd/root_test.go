@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"os"
+	"os/exec"
 	"testing"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -13,19 +14,50 @@ import (
 	"github.com/spf13/viper"
 )
 
+// Helpers
+///////////
+
 var previousProfile string
+var runTaskCount int
 
 func setup() {
 	previousProfile = os.Getenv("AWS_PROFILE")
-	os.Unsetenv("AWS_PROFILE")
-	os.Unsetenv("AWS_ACCESS_KEY_ID")
-	os.Unsetenv("AWS_SECRET_ACCESS_KEY")
+
+	unsetRequired()
 }
 
 func teardown() {
+	unsetRequired()
 	os.Setenv("AWS_PROFILE", previousProfile)
 	viper.Reset()
 }
+
+func setRequired() {
+	os.Setenv("AWS_PROFILE", "go-tester")
+	os.Setenv("AWS_ACCESS_KEY_ID", "123")
+	os.Setenv("AWS_SECRET_ACCESS_KEY", "SECRET123")
+	os.Setenv("ECSRUN_CMD", "echo, hello, world")
+	os.Setenv("ECSRUN_CLUSTER", "shred")
+	os.Setenv("ECSRUN_SECURITY_GROUP", "sg-1")
+	os.Setenv("ECSRUN_SUBNET", "public-subnet-1")
+	os.Setenv("ECSRUN_TASK", "task")
+	os.Setenv("ECSRUN_VERBOSE", "true")
+}
+
+func unsetRequired() {
+	os.Unsetenv("AWS_PROFILE")
+	os.Unsetenv("AWS_ACCESS_KEY_ID")
+	os.Unsetenv("AWS_SECRET_ACCESS_KEY")
+	os.Unsetenv("ECSRUN_CMD")
+	os.Unsetenv("ECSRUN_CLUSTER")
+	os.Unsetenv("ECSRUN_SECURITY_GROUP")
+	os.Unsetenv("ECSRUN_SUBNET")
+	os.Unsetenv("ECSRUN_TASK")
+	os.Unsetenv("ECSRUN_VERBOSE")
+}
+
+// Mocks
+/////////
 
 type ecsClientFake struct {
 	client ecsiface.ECSAPI
@@ -37,6 +69,7 @@ func (c *ecsClientFake) BuildRunTaskInput() *ecs.RunTaskInput {
 }
 
 func (c *ecsClientFake) RunTask(runTaskInput *ecs.RunTaskInput) (*ecs.RunTaskOutput, error) {
+	runTaskCount = runTaskCount + 1
 	return &ecs.RunTaskOutput{}, nil
 }
 
@@ -44,19 +77,14 @@ func newEcsClientFake(c *RunConfig) ECSClient {
 	return &ecsClientFake{}
 }
 
-func TestExecute(t *testing.T) {
-	setup()
-	assert := assert.New(t)
+// Tests
+/////////
 
-	os.Setenv("AWS_PROFILE", "go-tester")
-	os.Setenv("AWS_ACCESS_KEY_ID", "123")
-	os.Setenv("AWS_SECRET_ACCESS_KEY", "SECRET123")
-	os.Setenv("ECSRUN_CMD", "echo, hello, world")
-	os.Setenv("ECSRUN_CLUSTER", "shred")
-	os.Setenv("ECSRUN_SECURITY_GROUP", "sg-1")
-	os.Setenv("ECSRUN_SUBNET", "public-subnet-1")
-	os.Setenv("ECSRUN_TASK", "task")
-	os.Setenv("ECSRUN_VERBOSE", "true")
+func TestExecute(t *testing.T) {
+	assert := assert.New(t)
+	setup()
+
+	setRequired()
 
 	Execute(newEcsClientFake, VersionInfo{})
 
@@ -67,9 +95,59 @@ func TestExecute(t *testing.T) {
 	teardown()
 }
 
-func TestVersion(t *testing.T) {
-	setup()
+func TestDryRun(t *testing.T) {
 	assert := assert.New(t)
+	setup()
+
+	runTaskCount = 0
+
+	if os.Getenv("BE_CRASHER") == "1" {
+		setRequired()
+		viper.Set("dry-run", true)
+		Execute(newEcsClientFake, VersionInfo{})
+		return
+	}
+
+	c := exec.Command(os.Args[0], "-test.run=TestDryRun")
+	c.Env = append(os.Environ(), "BE_CRASHER=1")
+	err := c.Run()
+
+	assert.Equal(0, runTaskCount)
+	if e, ok := err.(*exec.ExitError); ok && e.Success() {
+		teardown()
+		return
+	}
+}
+
+// https://stackoverflow.com/a/33404435/1159410
+func TestRequiredVars(t *testing.T) {
+	assert := assert.New(t)
+	setup()
+	runTaskCount = 0
+
+	if os.Getenv("BE_CRASHER") == "1" {
+		setRequired()
+		os.Unsetenv("ECSRUN_CLUSTER")
+
+		Execute(newEcsClientFake, VersionInfo{})
+		return
+	}
+
+	c := exec.Command(os.Args[0], "-test.run=TestRequiredVars")
+	c.Env = append(os.Environ(), "BE_CRASHER=1")
+	err := c.Run()
+
+	assert.Equal(0, runTaskCount)
+	if e, ok := err.(*exec.ExitError); ok && !e.Success() {
+		teardown()
+		return
+	}
+	t.Fatalf("process ran with err %v, want exit status 1", err)
+}
+
+func TestVersion(t *testing.T) {
+	assert := assert.New(t)
+	setup()
 
 	vInfo := VersionInfo{
 		Version: "0.1.0",

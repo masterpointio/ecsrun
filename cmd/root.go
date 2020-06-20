@@ -10,6 +10,8 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/fatih/color"
+	"github.com/hokaccha/go-prettyjson"
 	"gopkg.in/yaml.v2"
 
 	"github.com/sirupsen/logrus"
@@ -48,32 +50,49 @@ var newEcsClient func(*RunConfig) ECSClient
 
 var rootCmd *cobra.Command = &cobra.Command{
 	Use:   "escrun",
-	Short: "Easily run one-off tasks against a ECS Cluster",
+	Short: "Easily run one-off tasks against an ECS Cluster",
 	Long: `
 ecsrun is a CLI tool that allows users to run one-off administrative tasks
 using their existing Task Definitions.`,
 
 	Run: func(cmd *cobra.Command, args []string) {
-		log.Info("Run!")
-
 		if err := initConfigFile(); err != nil {
 			log.Debug(err)
 		}
 
-		enforceRequired()
+		// Raise and exit if we're missing any required flags
+		if err := checkRequired(); err != nil {
+			fmt.Print(err.Error())
+			os.Exit(1)
+		}
 
 		config := BuildRunConfig()
 		ecsClient := newEcsClient(config)
 
 		input := ecsClient.BuildRunTaskInput()
-		log.Debug("RunTask input: ", input)
 
+		// Oooh fancy.
+		prettyBytes, _ := prettyjson.Marshal(input)
+		prettyString := string(prettyBytes)
+
+		// If we're running with --dry-run then print the input and exit.
+		if viper.GetBool("dry-run") {
+			cyan := color.New(color.FgCyan, color.Bold)
+			cyan.Printf("DryRun! RunTaskInput:\n")
+
+			fmt.Println(prettyString)
+
+			os.Exit(0)
+		}
+
+		log.Debug("RunTaskInput: ", prettyString)
 		output, err := ecsClient.RunTask(input)
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		log.Debug("RunTask output: ", output)
+		prettyOut, _ := prettyjson.Marshal(output)
+		log.Info("RunTaskOutput: ", string(prettyOut))
 	},
 }
 
@@ -100,6 +119,7 @@ func init() {
 	// TODO: Add this back at another time
 	// rootCmd.PersistentFlags().StringVar(&cfgFile, "config-file", "", "config file (default is $PWD/escrun.yml)")
 	rootCmd.PersistentFlags().String("config", "default", "config entry to read in the config file (default is 'default')")
+	rootCmd.PersistentFlags().Bool("dry-run", false, "dry-run your ecsrun execution to check config (default is false)")
 
 	// AWS Cred / Environment Flags
 	rootCmd.PersistentFlags().String("cred", "", "AWS credentials file (default is $HOME/.aws/.credentials)")
@@ -256,7 +276,10 @@ func findConfigFile() (string, error) {
 	return "", errors.New("config file not found")
 }
 
-func enforceRequired() error {
+// checkRequired maps over all the required flags and creates a nice err msg if
+// any are found. This is used instead of Cobra native required flags due to
+// the goofy configuration file setup.
+func checkRequired() error {
 	requiredFlags := []string{"cluster", "task", "cmd", "subnet", "security-group"}
 	unsetFlags := []string{}
 	for _, flag := range requiredFlags {
@@ -266,7 +289,13 @@ func enforceRequired() error {
 	}
 
 	if len(unsetFlags) > 0 {
-		errMsg := fmt.Sprintf("The following are required arguments: %s", strings.Join(unsetFlags, ","))
+		red := color.New(color.FgRed)
+		redB := color.New(color.FgRed, color.Bold)
+
+		start := red.Sprintf("The following are required arguments: ")
+		reqArgs := redB.Sprintf("%s", strings.Join(unsetFlags, ", "))
+
+		errMsg := fmt.Sprintf("%s%s\n", start, reqArgs)
 		return errors.New(errMsg)
 	}
 
