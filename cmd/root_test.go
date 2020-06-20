@@ -4,6 +4,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ecs"
 	"github.com/aws/aws-sdk-go/service/ecs/ecsiface"
@@ -47,6 +48,7 @@ func TestExecute(t *testing.T) {
 	setup()
 	assert := assert.New(t)
 
+	os.Setenv("AWS_PROFILE", "go-tester")
 	os.Setenv("AWS_ACCESS_KEY_ID", "123")
 	os.Setenv("AWS_SECRET_ACCESS_KEY", "SECRET123")
 	os.Setenv("ECSRUN_CMD", "echo, hello, world")
@@ -69,9 +71,18 @@ func TestInitAws(t *testing.T) {
 	assert := assert.New(t)
 	setup()
 
-	// TODO
-	t.Skip("TODO")
-	assert.Equal(true, true)
+	viper.Set("region", "random-region")
+
+	initAws()
+	sesh1 := viper.Get("session").(*session.Session)
+	assert.Equal(sesh1.Config.Region, aws.String("random-region"))
+
+	viper.Reset()
+	os.Setenv("AWS_REGION", "us-west-47")
+
+	initAws()
+	sesh2 := viper.Get("session").(*session.Session)
+	assert.Equal(sesh2.Config.Region, aws.String("us-west-47"))
 
 	teardown()
 }
