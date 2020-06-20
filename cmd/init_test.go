@@ -17,13 +17,13 @@ var testFs = afero.NewMemMapFs()
 func TestInitCmd(t *testing.T) {
 	assert := assert.New(t)
 
-	viper.SetFs(testFs)
-
 	exists, err := afero.Exists(testFs, "./ecsrun.yaml")
 	if err != nil {
 		panic(err)
 	}
 	assert.False(exists)
+
+	viper.SetFs(testFs)
 
 	initCmd()
 
@@ -34,4 +34,7 @@ func TestInitCmd(t *testing.T) {
 	assert.True(exists)
 
 	testFs.Remove("./ecsrun.yaml")
+
+	// Set back the FS to not affect other tests
+	viper.SetFs(afero.NewOsFs())
 }

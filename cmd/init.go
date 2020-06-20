@@ -11,13 +11,14 @@ var InitCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Creates a blank `ecsrun.yml` config file in the current directory.",
 	Run: func(cmd *cobra.Command, args []string) {
+		// Reset viper as it carries over config from root. We want to build our own config.
+		viper.Reset()
+
 		initCmd()
 	},
 }
 
 func initCmd() {
-	// Reset viper as it carries over config from root. We want to build our own config.
-	viper.Reset()
 
 	config := make(map[string]interface{})
 	config["default"] = map[string]interface{}{

@@ -120,7 +120,7 @@ func TestDryRun(t *testing.T) {
 }
 
 // https://stackoverflow.com/a/33404435/1159410
-func TestRequiredVars(t *testing.T) {
+func TestCheckRequired(t *testing.T) {
 	assert := assert.New(t)
 	setup()
 	runTaskCount = 0
@@ -133,7 +133,7 @@ func TestRequiredVars(t *testing.T) {
 		return
 	}
 
-	c := exec.Command(os.Args[0], "-test.run=TestRequiredVars")
+	c := exec.Command(os.Args[0], "-test.run=TestCheckRequired")
 	c.Env = append(os.Environ(), "BE_CRASHER=1")
 	err := c.Run()
 
@@ -197,7 +197,6 @@ func TestConfigFile(t *testing.T) {
 	err := initConfigFile()
 
 	assert.Nil(err)
-	viper.Debug()
 	assert.Equal("test-cluster", viper.Get("cluster"))
 	assert.Equal("test-task", viper.Get("task"))
 	assert.Equal("sg1", viper.Get("security-group"))

@@ -29,8 +29,6 @@ type VersionInfo struct {
 	BuiltBy string
 }
 
-var vInfo VersionInfo
-
 func (v VersionInfo) String() string {
 	return fmt.Sprintf(
 		"ecsrun version info\nVersion: %s\nCommit: %s\nDate Built: %s\nBuilt By: %s\n",
@@ -40,11 +38,13 @@ func (v VersionInfo) String() string {
 		v.BuiltBy)
 }
 
-var log = logrus.New()
-
-var fs = afero.NewOsFs()
-
-var newEcsClient func(*RunConfig) ECSClient
+var (
+	vInfo        VersionInfo
+	log          = logrus.New()
+	fs           = afero.NewOsFs()
+	newEcsClient func(*RunConfig) ECSClient
+	cyan         = color.New(color.FgCyan, color.Bold)
+)
 
 var rootCmd *cobra.Command = &cobra.Command{
 	Use:   "escrun",
@@ -77,9 +77,7 @@ using their existing Task Definitions.`,
 
 		// If we're running with --dry-run then print the input and exit.
 		if viper.GetBool("dry-run") {
-			cyan := color.New(color.FgCyan, color.Bold)
 			cyan.Printf("DryRun! RunTaskInput:\n")
-
 			fmt.Println(prettyString)
 
 			os.Exit(0)
@@ -91,8 +89,9 @@ using their existing Task Definitions.`,
 			log.Fatal(err)
 		}
 
+		cyan.Printf("RunTaskOutput: \n")
 		prettyOut, _ := prettyjson.Marshal(output)
-		log.Info("RunTaskOutput: ", string(prettyOut))
+		fmt.Println(string(prettyOut))
 	},
 }
 
@@ -316,6 +315,7 @@ func checkRequired() error {
 	}
 
 	if len(unsetFlags) > 0 {
+		log.Debug("checkRequired - unsetFlags: ", unsetFlags)
 		red := color.New(color.FgRed)
 		redB := color.New(color.FgRed, color.Bold)
 
