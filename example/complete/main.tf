@@ -44,7 +44,7 @@ module "subnets" {
 module "container_definition" {
   source          = "git::https://github.com/cloudposse/terraform-aws-ecs-container-definition.git?ref=tags/0.23.0"
   container_name  = module.label.id
-  container_image = "alpine:latest"
+  container_image = "bashell/alpine-bash:latest"
   log_configuration = {
     logDriver = "awslogs"
     options = {
