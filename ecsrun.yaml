@@ -1,0 +1,4 @@
+default:
+    cluster: "testing"
+    task: "testing2"
+    security-group: "sg1"
