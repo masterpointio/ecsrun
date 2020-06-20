@@ -54,6 +54,8 @@ ecsrun is a CLI tool that allows users to run one-off administrative tasks
 using their existing Task Definitions.`,
 
 	Run: func(cmd *cobra.Command, args []string) {
+		initEnvVars()
+		initAws()
 		if err := initConfigFile(); err != nil {
 			log.Debug(err)
 		}
@@ -105,39 +107,43 @@ func Execute(n func(*RunConfig) ECSClient, v VersionInfo) {
 }
 
 func init() {
-	cobra.OnInitialize(initEnvVars, initVerbose, initVersion, initAws)
+	cobra.OnInitialize(initVerbose, initVersion)
 
 	log.SetOutput(os.Stderr)
 
 	// Basic Flags
-	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "verbose output")
-	rootCmd.PersistentFlags().Bool("version", false, "version output")
+	rootCmd.Flags().BoolP("verbose", "v", false, "verbose output")
+	rootCmd.Flags().Bool("version", false, "version output")
 
 	// Config File Flags
-	rootCmd.PersistentFlags().String("config-file", "", "config file to read config entries from (default is $PWD/escrun.yml)")
-	rootCmd.PersistentFlags().String("config", "default", "config entry to read in the config file (default is 'default')")
-	rootCmd.PersistentFlags().Bool("dry-run", false, "dry-run your ecsrun execution to check config (default is false)")
+	rootCmd.Flags().String("config-file", "", "config file to read config entries from (default is $PWD/escrun.yml)")
+	rootCmd.Flags().String("config", "default", "config entry to read in the config file (default is 'default')")
+	rootCmd.Flags().Bool("dry-run", false, "dry-run your ecsrun execution to check config (default is false)")
 
 	// AWS Cred / Environment Flags
-	rootCmd.PersistentFlags().String("cred", "", "AWS credentials file (default is $HOME/.aws/.credentials)")
-	rootCmd.PersistentFlags().StringP("profile", "p", "", "AWS profile to target (default is AWS_PROFILE or 'default')")
-	rootCmd.PersistentFlags().String("region", "", `AWS region to target (default is AWS_REGION or pulled from $HOME/.aws/.credentials)`)
+	rootCmd.Flags().String("cred", "", "AWS credentials file (default is $HOME/.aws/.credentials)")
+	rootCmd.Flags().StringP("profile", "p", "", "AWS profile to target (default is AWS_PROFILE or 'default')")
+	rootCmd.Flags().String("region", "", `AWS region to target (default is AWS_REGION or pulled from $HOME/.aws/.credentials)`)
 
 	// Task Flags
-	rootCmd.PersistentFlags().StringP("cluster", "c", "", "The ECS Cluster to run the task in.")
-	rootCmd.PersistentFlags().StringP("task", "t", "", "The name of the ECS Task Definition to use.")
-	rootCmd.PersistentFlags().StringP("revision", "r", "", "The Task Definition revision to use.")
-	rootCmd.PersistentFlags().StringP("name", "n", "", "The name of the container in the Task Definition.")
-	rootCmd.PersistentFlags().StringP("launch-type", "l", "FARGATE", "The launch type to run as. Currently only Fargate is supported.")
-	rootCmd.PersistentFlags().StringSlice("cmd", []string{}, "The comma separated command override to apply.")
-	rootCmd.PersistentFlags().Int64("count", 1, "The number of tasks to launch for the given cmd.")
+	rootCmd.Flags().StringP("cluster", "c", "", "The ECS Cluster to run the task in.")
+	rootCmd.Flags().StringP("task", "t", "", "The name of the ECS Task Definition to use.")
+	rootCmd.Flags().StringP("revision", "r", "", "The Task Definition revision to use.")
+	rootCmd.Flags().StringP("name", "n", "", "The name of the container in the Task Definition.")
+	rootCmd.Flags().StringP("launch-type", "l", "FARGATE", "The launch type to run as. Currently only Fargate is supported.")
+	rootCmd.Flags().StringSlice("cmd", []string{}, "The comma separated command override to apply.")
+	rootCmd.Flags().Int64("count", 1, "The number of tasks to launch for the given cmd.")
 
 	// Network Flags
-	rootCmd.PersistentFlags().StringP("subnet", "s", "", "The Subnet ID that the task should be launched in.")
-	rootCmd.PersistentFlags().StringP("security-group", "g", "", "The Security Group ID that the task should be associated with.")
-	rootCmd.PersistentFlags().Bool("public", false, "Assigns a public IP to the task if included. (default is false)")
+	rootCmd.Flags().StringP("subnet", "s", "", "The Subnet ID that the task should be launched in.")
+	rootCmd.Flags().StringP("security-group", "g", "", "The Security Group ID that the task should be associated with.")
+	rootCmd.Flags().Bool("public", false, "Assigns a public IP to the task if included. (default is false)")
 
-	viper.BindPFlags(rootCmd.PersistentFlags())
+	// Bind all cobra flags to Viper. viper.Get is used heavily.
+	viper.BindPFlags(rootCmd.Flags())
+
+	// Add sub commands
+	rootCmd.AddCommand(InitCmd)
 }
 
 func initEnvVars() {
@@ -204,12 +210,10 @@ func getProfile() string {
 }
 
 func initAwsSession(profile string) (*session.Session, error) {
-	credFile, err := rootCmd.PersistentFlags().GetString("cred")
-	if err != nil {
-		log.Fatal("Not able to get credFile from cmd.", err)
-	}
+	credFile := viper.GetString("cred")
 
 	var sesh *session.Session
+	var err error
 
 	if credFile != "" {
 		sesh, err = session.NewSession(&aws.Config{
