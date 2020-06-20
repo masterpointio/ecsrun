@@ -4,8 +4,6 @@
 *.dll
 *.so
 *.dylib
-ecsrun
-dist/
 
 # Test binary, built with `go test -c`
 *.test
@@ -16,7 +14,8 @@ dist/
 # Dependency directories (remove the comment below to include it)
 vendor/
 
-.gopath
-bin/
-
+# ecsrun specific
 *.tfstate*
+ecsrun
+dist/
+ecsrun.yaml
