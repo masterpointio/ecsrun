@@ -1,4 +1,13 @@
-default:
-    cluster: "testing"
-    task: "testing2"
-    security-group: "sg1"
+default: &default
+  cluster: "testing"
+  task: "testing2"
+  security-group: "sg1"
+
+custom:
+  <<: *default
+  subnet: "subnet-12345"
+  cmd:
+    - bash
+    - -c
+    - echo
+    - "hello world"
