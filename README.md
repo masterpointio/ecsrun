@@ -1,10 +1,16 @@
-# ecsrun
-Easily run one-off tasks against a ECS Task Definition
+# ecsrun [![Powered By: GoReleaser](https://img.shields.io/badge/powered%20by-goreleaser-green.svg?style=flat-square)](https://github.com/goreleaser) [![Release](https://img.shields.io/github/release/masterpointio/ecsrun.svg)](https://github.com/masterpointio/ecsrun/releases/latest)
 
-# TODO
+Easily run one-off tasks against an ECS Task Definition.
 
-- [] Support basic CLI usage
-- [] Support local config file
+## Usage
+- TODO
+
+## Roadmap
+
+- [x] Support basic CLI usage
+- [x] Support local config file
+- [ ] Refactor root.go to be cleaner.
+- [ ] Add more tests
 - [] Support `--dryrun` Flag
 - [] Support selection of resources similar to gossm (cluster, task def, task def version, etc etc)
 - [] Support log group / stream tailing of initiated task
