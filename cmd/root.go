@@ -253,17 +253,32 @@ func initConfigFile() error {
 		return err
 	}
 
-	config := make(map[string]map[string]interface{})
+	config := make(map[string]interface{})
 	if err := yaml.Unmarshal(file, &config); err != nil {
 		return err
 	}
 
 	log.Debug("Full config file contents: ", config)
 
+	// Ooof this is rough.
 	configEntry := viper.GetString("config")
+	rawEntry := config[configEntry].(map[interface{}]interface{})
+	entry := make(map[string]interface{})
+	for key, val := range rawEntry {
+		strKey := fmt.Sprintf("%v", key)
+		var resVal interface{}
 
-	log.Debug("Config entry: ", configEntry, " result: ", config[configEntry])
-	if err = viper.MergeConfigMap(config[configEntry]); err != nil {
+		if strKey == "cmd" {
+			resVal = val.([]interface{})
+		} else {
+			resVal = fmt.Sprintf("%v", val)
+		}
+
+		entry[strKey] = resVal
+	}
+
+	log.Debug("Config entry: ", configEntry, " result: ", entry)
+	if err = viper.MergeConfigMap(entry); err != nil {
 		return err
 	}
 
