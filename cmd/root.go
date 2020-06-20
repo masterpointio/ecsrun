@@ -19,6 +19,16 @@ import (
 	"github.com/spf13/viper"
 )
 
+// VersionInfo is used by the `--version` command to output version info.
+type VersionInfo struct {
+	Version string
+	Commit  string
+	Date    string
+	BuiltBy string
+}
+
+var vInfo VersionInfo
+
 var cfgFile string
 
 var log = logrus.New()
@@ -38,7 +48,7 @@ using their existing Task Definitions.`,
 		log.Info("Run!")
 
 		if err := initConfigFile(); err != nil {
-			panic(err)
+			log.Debug(err)
 		}
 
 		enforceRequired()
@@ -60,20 +70,22 @@ using their existing Task Definitions.`,
 
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
-func Execute(n func(*RunConfig) ECSClient) {
+func Execute(n func(*RunConfig) ECSClient, v VersionInfo) {
 	newEcsClient = n
+	vInfo = v
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatal(err)
 	}
 }
 
 func init() {
-	cobra.OnInitialize(initEnvVars, initVerbose, initAws)
+	cobra.OnInitialize(initEnvVars, initVerbose, initVersion, initAws)
 
 	log.SetOutput(os.Stderr)
 
 	// Basic Flags
 	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "verbose output")
+	rootCmd.PersistentFlags().Bool("version", false, "version output")
 
 	// Config File Flags
 	// TODO: Add this back at another time
@@ -118,14 +130,21 @@ func initEnvVars() {
 }
 
 func initVerbose() {
-	verbose, err := rootCmd.PersistentFlags().GetBool("verbose")
-	if err != nil {
-		log.Fatal("Unable to pull verbose flag.", err)
-	}
-
-	if verbose {
+	if viper.GetBool("verbose") {
 		log.Info("Enabling verbose output.")
 		log.SetLevel(logrus.DebugLevel)
+	}
+}
+
+func initVersion() {
+	if viper.GetBool("version") {
+		fmt.Printf(
+			"ecsrun version info\nVersion: %s\nCommit: %s\nDate Built: %s\nBuilt By: %s\n",
+			vInfo.Version,
+			vInfo.Commit,
+			vInfo.Date,
+			vInfo.BuiltBy)
+		os.Exit(0)
 	}
 }
 

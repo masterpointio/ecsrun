@@ -23,6 +23,21 @@ package main
 
 import "github.com/masterpointio/ecsrun/cmd"
 
+// The following vars are provided by goreleaser at build time.
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+	builtBy = "unknown"
+)
+
 func main() {
-	cmd.Execute(cmd.NewEcsClient)
+	vInfo := cmd.VersionInfo{
+		Version: version,
+		Commit:  commit,
+		Date:    date,
+		BuiltBy: builtBy,
+	}
+
+	cmd.Execute(cmd.NewEcsClient, vInfo)
 }
