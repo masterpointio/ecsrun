@@ -58,11 +58,32 @@ func TestExecute(t *testing.T) {
 	os.Setenv("ECSRUN_TASK", "task")
 	os.Setenv("ECSRUN_VERBOSE", "true")
 
-	Execute(newEcsClientFake)
+	Execute(newEcsClientFake, VersionInfo{})
 
 	var sesh = viper.Get("session")
 	cred, _ := sesh.(*session.Session).Config.Credentials.Get()
 	assert.Equal("123", cred.AccessKeyID)
+
+	teardown()
+}
+
+func TestVersion(t *testing.T) {
+	setup()
+	assert := assert.New(t)
+
+	vInfo := VersionInfo{
+		Version: "0.1.0",
+		Commit:  "238958943",
+		Date:    "06/19/20",
+		BuiltBy: "MDG",
+	}
+
+	result := vInfo.String()
+
+	assert.Contains(result, "0.1.0")
+	assert.Contains(result, "238958943")
+	assert.Contains(result, "06/19/20")
+	assert.Contains(result, "MDG")
 
 	teardown()
 }

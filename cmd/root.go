@@ -29,6 +29,15 @@ type VersionInfo struct {
 
 var vInfo VersionInfo
 
+func (v VersionInfo) String() string {
+	return fmt.Sprintf(
+		"ecsrun version info\nVersion: %s\nCommit: %s\nDate Built: %s\nBuilt By: %s\n",
+		v.Version,
+		v.Commit,
+		v.Date,
+		v.BuiltBy)
+}
+
 var cfgFile string
 
 var log = logrus.New()
@@ -138,12 +147,7 @@ func initVerbose() {
 
 func initVersion() {
 	if viper.GetBool("version") {
-		fmt.Printf(
-			"ecsrun version info\nVersion: %s\nCommit: %s\nDate Built: %s\nBuilt By: %s\n",
-			vInfo.Version,
-			vInfo.Commit,
-			vInfo.Date,
-			vInfo.BuiltBy)
+		fmt.Print(vInfo.String())
 		os.Exit(0)
 	}
 }
