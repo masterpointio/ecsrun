@@ -49,8 +49,7 @@ var (
 var rootCmd *cobra.Command = &cobra.Command{
 	Use:   "escrun",
 	Short: "Easily run one-off tasks against an ECS Cluster",
-	Long: `
-ecsrun is a CLI tool that allows users to run one-off administrative tasks
+	Long: `ecsrun is a CLI tool that allows users to run one-off administrative tasks
 using their existing Task Definitions.`,
 
 	Run: func(cmd *cobra.Command, args []string) {

@@ -2,6 +2,12 @@ default: &default
   cluster: "test-cluster"
   task: "test-task"
   security-group: "sg1"
+  subnet: "subnet-54321"
+  cmd:
+    - bash
+    - -c
+    - echo
+    - "hello world"
 
 custom:
   <<: *default
@@ -10,4 +16,4 @@ custom:
     - bash
     - -c
     - echo
-    - "hello world"
+    - "custom"
