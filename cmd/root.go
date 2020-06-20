@@ -40,8 +40,6 @@ func (v VersionInfo) String() string {
 		v.BuiltBy)
 }
 
-var cfgFile string
-
 var log = logrus.New()
 
 var fs = afero.NewOsFs()
@@ -116,8 +114,7 @@ func init() {
 	rootCmd.PersistentFlags().Bool("version", false, "version output")
 
 	// Config File Flags
-	// TODO: Add this back at another time
-	// rootCmd.PersistentFlags().StringVar(&cfgFile, "config-file", "", "config file (default is $PWD/escrun.yml)")
+	rootCmd.PersistentFlags().String("config-file", "", "config file to read config entries from (default is $PWD/escrun.yml)")
 	rootCmd.PersistentFlags().String("config", "default", "config entry to read in the config file (default is 'default')")
 	rootCmd.PersistentFlags().Bool("dry-run", false, "dry-run your ecsrun execution to check config (default is false)")
 
@@ -232,7 +229,17 @@ func initAwsSession(profile string) (*session.Session, error) {
 }
 
 func initConfigFile() error {
-	filename, err := findConfigFile()
+	var filename string
+	var err error
+
+	cfgFile := viper.GetString("config-file")
+
+	if cfgFile == "" {
+		filename, err = findConfigFile()
+	} else {
+		filename, err = findCustomConfigFile(cfgFile)
+	}
+
 	if err != nil {
 		return err
 	}
@@ -252,11 +259,27 @@ func initConfigFile() error {
 	log.Debug("Full config file contents: ", config)
 
 	configEntry := viper.GetString("config")
+
+	log.Debug("Config entry: ", configEntry, " result: ", config[configEntry])
 	if err = viper.MergeConfigMap(config[configEntry]); err != nil {
 		return err
 	}
 
 	return nil
+}
+
+func findCustomConfigFile(filename string) (string, error) {
+	log.Info("filename: ", filename)
+	exists, err := afero.Exists(fs, filename)
+	if err != nil {
+		return "", err
+	}
+
+	if exists {
+		return filename, nil
+	}
+
+	return "", errors.New("custom config file not found")
 }
 
 func findConfigFile() (string, error) {
@@ -266,7 +289,7 @@ func findConfigFile() (string, error) {
 		filename := filepath.Join(".", "ecsrun"+"."+extension)
 		exists, err := afero.Exists(fs, filename)
 		if err != nil {
-			log.Fatal("Failed to check if file exists: ", err)
+			return "", err
 		}
 
 		if exists {

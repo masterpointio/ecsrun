@@ -9,10 +9,9 @@ Easily run one-off tasks against an ECS Task Definition.
 
 - [x] Support basic CLI usage
 - [x] Support local config file
-- [ ] Refactor root.go to be cleaner.
-- [ ] Add more tests
-- [] Support `--dryrun` Flag
-- [] Support selection of resources similar to gossm (cluster, task def, task def version, etc etc)
+- [x] Support `--dryrun` Flag
+- [x] Add more tests
 - [] Support log group / stream tailing of initiated task
+- [] Support selection of resources similar to gossm (cluster, task def, task def version, etc etc)
 - [] Support validation of given params: cluster, definition name, revision, subnet ID, SG ID, ect.
 - [] Support EC2 usage.

@@ -1,6 +1,6 @@
 default: &default
-  cluster: "testing"
-  task: "testing2"
+  cluster: "test-cluster"
+  task: "test-task"
   security-group: "sg1"
 
 custom:

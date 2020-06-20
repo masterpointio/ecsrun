@@ -190,8 +190,17 @@ func TestConfigFile(t *testing.T) {
 	assert := assert.New(t)
 	setup()
 
-	t.Skip("TODO")
-	assert.Equal(true, true)
+	setRequired()
+	viper.Set("config", "default")
+	viper.Set("config-file", "../example/configs/ecsrun.yaml")
+
+	err := initConfigFile()
+
+	assert.Nil(err)
+	viper.Debug()
+	assert.Equal("test-cluster", viper.Get("cluster"))
+	assert.Equal("test-task", viper.Get("task"))
+	assert.Equal("sg1", viper.Get("security-group"))
 
 	teardown()
 }
