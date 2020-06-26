@@ -223,6 +223,7 @@ func initAwsSession(profile string) (*session.Session, error) {
 			SharedConfigState: session.SharedConfigEnable,
 			Config: aws.Config{
 				CredentialsChainVerboseErrors: aws.Bool(true),
+				Credentials: credentials.NewEnvCredentials(),
 			},
 		}))
 	}
