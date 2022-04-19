@@ -30,7 +30,7 @@ changelog:
       - "^docs:"
       - "^test:"
 brews:
-  - github:
+  - tap:
       owner: masterpointio
       name: homebrew-tap
     description: Easily run one-off tasks against an ECS Task Definition.
