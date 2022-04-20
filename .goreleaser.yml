@@ -30,9 +30,6 @@ changelog:
       - "^docs:"
       - "^test:"
 
-release:
-  disable: true
-
 brews:
   - tap:
       owner: masterpointio
