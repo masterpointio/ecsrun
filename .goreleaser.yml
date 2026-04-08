@@ -1,3 +1,4 @@
+version: 2
 before:
   hooks:
     # You may remove this if you don't use go modules.
@@ -12,29 +13,20 @@ builds:
       - darwin
       - windows
 archives:
-  - name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
-    replacements:
-      darwin: Darwin
-      linux: Linux
-      windows: Windows
-      386: i386
-      amd64: x86_64
+  - name_template: "{{ .ProjectName }}_{{- if eq .Os \"darwin\" }}Darwin{{- else if eq .Os \"windows\" }}Windows{{- else }}Linux{{ end }}_{{- if eq .Arch \"amd64\" }}x86_64{{- else if eq .Arch \"386\" }}i386{{- else }}{{ .Arch }}{{ end }}"
 checksum:
   name_template: "checksums.txt"
 snapshot:
-  name_template: "{{ .Tag }}-next"
+  version_template: "{{ .Version }}-next"
 changelog:
   sort: asc
   filters:
     exclude:
       - "^docs:"
       - "^test:"
-
-brews:
-  - tap:
+homebrew_casks:
+  - repository:
       owner: masterpointio
       name: homebrew-tap
     description: Easily run one-off tasks against an ECS Task Definition.
     homepage: https://github.com/masterpointio/ecsrun
-    test: |
-      system "#{bin}/ecsrun --version"
