@@ -30,5 +30,3 @@ homebrew_casks:
       name: homebrew-tap
     description: Easily run one-off tasks against an ECS Task Definition.
     homepage: https://github.com/masterpointio/ecsrun
-    test: |
-      system "#{bin}/ecsrun --version"
